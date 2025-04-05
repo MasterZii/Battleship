@@ -1,0 +1,239 @@
+﻿<!--Alex Miller - A5-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BATTLESHIP</title>
+    <link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+    <h1>WELCOME TO:</h1>
+    <pre>
+██████╗  █████╗ ████████╗████████╗██╗     ███████╗███████╗██╗  ██╗██╗██████╗ 
+██╔══██╗██╔══██╗╚══██╔══╝╚══██╔══╝██║     ██╔════╝██╔════╝██║  ██║██║██╔══██╗
+██████╔╝███████║   ██║      ██║   ██║     █████╗  ███████╗███████║██║██████╔╝
+██╔══██╗██╔══██║   ██║      ██║   ██║     ██╔══╝  ╚════██║██╔══██║██║██╔═══╝ 
+██████╔╝██║  ██║   ██║      ██║   ███████╗███████╗███████║██║  ██║██║██║     
+╚═════╝ ╚═╝  ╚═╝   ╚═╝      ╚═╝   ╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝     
+</pre>
+    <div class="status" id="status">Click on any square to begin.</div>
+    <br>
+    <button id="StartGameBtn">(Re)start Game</button>
+    <br>
+    <div class="game">
+        <div class="gridjs" id="board">
+
+
+            <script>
+                //making the 6x6 grid the same way we made the 3x3 TTT one
+                const NUM_SQUARES = 36;
+                for (let i = 0; i < NUM_SQUARES; i++)
+                {
+                    document.write("<div class='square' id='sq" + i + "'></div>");
+                }
+            </script>
+        </div>
+    </div>
+
+    <script>
+        //config of the board
+        const boardSize = 6; //6x6 game board size
+        let gameOver = false;
+        let guesses = 0;
+        const maxGuesses = 20;
+        let totalShipCells = 0;
+        let hits = 0;
+        let ships = [];
+        let battleshipData = null; //needed to add so that I can load via github, not needed for local pull
+
+
+
+        /*testing JSON ships here locally
+        const battleshipData =
+        {
+            "ships":
+                [
+                { "name": "ship1", "orientation": "vertical", "size": 4, "coords": [2, 3] },
+                { "name": "ship2", "orientation": "horizontal", "size": 3, "coords": [3, 3] },
+                { "name": "ship3", "orientation": "vertical", "size": 2, "coords": [6, 5] }
+            ]
+        };*/
+
+        //function to fetch the json for the ships we need
+        fetch('https://raw.githubusercontent.com/MasterZii/Battleship/refs/heads/main/battleship.json')
+            .then(response =>
+            {
+                if (!response.ok)
+                {
+                    throw new Error(`HTTP error or whatever: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data =>
+            {
+                battleshipData = data;
+                console.log("Battleship JSON data has loaded up: ", battleshipData);
+                startGame(); //game can start after data loaded
+            })
+            .catch(error =>
+            {
+                console.error('Error with JSON fetch: ', error);
+            });
+            //otherwise I'd have just tried to use node to get this to work, but github hosting is quicker to get going
+
+
+
+        //initializing the game here
+        function startGame()
+        {
+            gameOver = false;
+            guesses = 0;
+            hits = 0;
+            ships = [];
+            totalShipCells = 0;
+            document.getElementById("status").textContent = "Click on any square to begin.";
+
+            //clean the game board, remove hits and misses
+            for (let i = 0; i < boardSize * boardSize; i++)
+            {
+                const square = document.getElementById("sq" + i);
+                square.innerHTML = "";
+                square.classList.remove("hit", "miss");
+                square.style.backgroundColor = "";
+            }
+
+            //throw the ships into the cells based on the JSON data
+            placeShips();
+        }
+
+        //pull data from the JSON for the ships
+        function placeShips()
+        {
+            battleshipData.ships.forEach(shipData =>
+            {
+                let ship =
+                {
+                    name: shipData.name,
+                    orientation: shipData.orientation,
+                    size: shipData.size,
+                    coords: shipData.coords, //column/row index of 1
+                    cells: [],
+                    hits: 0
+                };
+                let startCol = ship.coords[0];
+                let startRow = ship.coords[1];
+                for (let i = 0; i < ship.size; i++)
+                {
+                    let col = startCol;
+                    let row = startRow;
+                    if (ship.orientation === "horizontal")
+                    {
+                        col = startCol + i;
+                    } else
+                    { //vertical
+                        row = startRow + i;
+                    }
+                    //conversion for the board/grid per 0-index
+                    let index = (row - 1) * boardSize + (col - 1);
+                    ship.cells.push(index);
+                }
+                ships.push(ship);
+                totalShipCells += ship.size;
+            });
+        }
+
+        //injesting the clicks on a sqaure/cell
+        function handleSquareClick(index, squareElement)
+        {
+            if (gameOver || squareElement.classList.contains("hit") || squareElement.classList.contains("miss")) {
+                return;
+            }
+            guesses++;
+            let shipHit = null;
+            //if the square clicked on also a square that's part of a ship? 
+            for (let ship of ships)
+            {
+                if (ship.cells.includes(index)) //confirming the cell matches ship json data
+                {
+                    shipHit = ship;
+                    break;
+                }
+            }
+            if (shipHit)
+            {
+                squareElement.classList.add("hit");
+                shipHit.hits++;
+                hits++;
+                if (shipHit.hits === shipHit.size) //click that ends in a ship sinking
+                {
+                    document.getElementById("status").textContent = "Ship sunk! You have " + (maxGuesses - guesses) + " guesses remaining.";
+                }
+                else //just a hit without sinking a ship
+                {
+                    document.getElementById("status").textContent = "That's a hit! You have " + (maxGuesses - guesses) + " guesses remaining.";
+                }
+            }
+            else //no ship cell clicked on
+            {
+                squareElement.classList.add("miss");
+                document.getElementById("status").textContent = "Sorry, no ship here! You have " + (maxGuesses - guesses) + " guesses remaining.";
+            }
+            checkGameOver(); //if player sunk all ships or exhausted all guesses, we need to end the game
+        }
+
+        //gameplay for hits, misses, and guesses
+        function checkGameOver()
+        {
+            if (hits === totalShipCells) //game ends and wins if user clicks on every ships cell
+            {
+                gameOver = true;
+                document.getElementById("status").textContent = "WINNER! You sunk every ship using " + guesses + " guesses.";
+                revealShips();
+            }
+            else if (guesses >= maxGuesses) //game ends and loses if user uses up all guesses without finding every ship cell
+            {
+                gameOver = true;
+                document.getElementById("status").textContent = "YOU SUNK! You've used up all guesses.";
+                revealShips();
+            }
+        }
+
+        //let's show the player where all the ships were after the game ends so they know how close they were if they lost
+        function revealShips()
+        {
+            ships.forEach(ship =>
+            {
+                ship.cells.forEach(cellIndex =>
+                {
+                    let square = document.getElementById("sq" + cellIndex);
+                    if (!square.classList.contains("hit"))
+                    {
+                        //let's have the missed ship parts in a darker red for visibility
+                        square.style.backgroundColor = "darkred";
+                    }
+                });
+            });
+        }
+
+        //each square/cell has an event listener for clicks and game mechanics 
+        for (let i = 0; i < boardSize * boardSize; i++)
+        {
+            let square = document.getElementById("sq" + i);
+            square.addEventListener("click", function ()
+            {
+                handleSquareClick(i, square); //clicky clicky
+            });
+        }
+
+        //an option for restarting the game, game auto-starts anyway
+        document.getElementById("StartGameBtn").addEventListener("click", startGame);
+
+        //when the webpage loads, the game starts here
+        startGame();
+    </script>
+</body>
+<!--DGMD E-28-->
+</html>
